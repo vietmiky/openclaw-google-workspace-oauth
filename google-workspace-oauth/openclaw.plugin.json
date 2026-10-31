@@ -1,0 +1,42 @@
+{
+  "id": "google-workspace-oauth",
+  "name": "Google Workspace OAuth",
+  "description": "Unified OAuth connector and tools for Gmail, Calendar, Drive, Sheets, Docs, and Contacts.",
+  "version": "0.1.0",
+  "providers": ["google-workspace"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["oauthClientJson"],
+    "properties": {
+      "oauthClientJson": {
+        "description": "Google OAuth Desktop client JSON stored as a SecretRef",
+        "anyOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source", "provider", "id"],
+            "properties": {
+              "source": { "const": "store" },
+              "provider": { "type": "string", "minLength": 1 },
+              "id": { "type": "string", "minLength": 1 }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "uiHints": {
+    "oauthClientJson": { "label": "OAuth client JSON", "sensitive": true }
+  },
+  "configContracts": {
+    "secretInputs": {
+      "paths": [
+        { "path": "oauthClientJson", "expected": "string" }
+      ]
+    }
+  },
+  "activation": { "onStartup": true },
+  "contracts": { "tools": ["google_workspace"] }
+}
