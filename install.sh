@@ -1422,7 +1422,7 @@ OPENCLAW_BIN="$(command -v openclaw || true)"
 [[ -n "$OPENCLAW_BIN" ]] || die "openclaw command not found."
 [[ -f "$CONFIG_PATH" ]] || die "OpenClaw config not found: $CONFIG_PATH"
 
-VERSION_OUTPUT="$($OPENCLAW_BIN --version 2>&1)"
+VERSION_OUTPUT="$($OPENCLAW_BIN --version </dev/null 2>&1)"
 if [[ "$VERSION_OUTPUT" =~ OpenClaw[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+) ]]; then
   CORE_VERSION="${BASH_REMATCH[1]}"
 else
@@ -1437,9 +1437,9 @@ export OPENCLAW_VERSION="$CORE_VERSION"
 say "OpenClaw: $CORE_VERSION"
 say "Preparing plugin $PLUGIN_ID $PLUGIN_VERSION..."
 cd "$SOURCE"
-npm ci --no-audit --no-fund
-npm run build
-npm test
+npm ci --no-audit --no-fund </dev/null
+npm run build </dev/null
+npm test </dev/null
 
 python3 - "$SOURCE" <<'PY'
 import json, pathlib, sys
@@ -1481,7 +1481,7 @@ INSTALL_OUTPUT="$("$OPENCLAW_BIN" plugins install \
   --force \
   --accept-capabilities \
   --acknowledge-install-policy-warning \
-  "$PLUGIN_DIR" 2>&1)"
+  "$PLUGIN_DIR" </dev/null 2>&1)"
 INSTALL_STATUS=$?
 set -e
 printf '%s\n' "$INSTALL_OUTPUT"
@@ -1495,9 +1495,9 @@ if ((INSTALL_STATUS != 0)); then
      && "$INSTALL_OUTPUT" == *"no authoritative runtime child list"* ]]; then
     say "Refreshing the plugin registry after the saved first install..."
     REGISTRY_FILE="$(mktemp /tmp/google-workspace-registry.XXXXXX.json)"
-    "$OPENCLAW_BIN" plugins registry --refresh --json > "$REGISTRY_FILE"
+    "$OPENCLAW_BIN" plugins registry --refresh --json </dev/null > "$REGISTRY_FILE"
     LIST_FILE="$(mktemp /tmp/google-workspace-list.XXXXXX.json)"
-    "$OPENCLAW_BIN" plugins list --json > "$LIST_FILE"
+    "$OPENCLAW_BIN" plugins list --json </dev/null > "$LIST_FILE"
     python3 - "$LIST_FILE" "$PLUGIN_ID" "$PLUGIN_DIR" <<'PY'
 import json, os, sys
 payload=json.load(open(sys.argv[1], encoding='utf-8'))
@@ -1525,7 +1525,7 @@ if [[ -n "$OAUTH_JSON" ]]; then
   validate_oauth_json "$OAUTH_JSON"
   "$OPENCLAW_BIN" secrets store set GOOGLE_WORKSPACE_OAUTH_CLIENT_JSON \
     --kind secret \
-    --value-file "$OAUTH_JSON"
+    --value-file "$OAUTH_JSON" </dev/null
   CONFIGURE_SECRET=1
 elif ((SECRET_ALREADY_STORED)); then
   CONFIGURE_SECRET=1
@@ -1537,22 +1537,22 @@ if ((CONFIGURE_SECRET)); then
     --ref-provider default \
     --ref-source store \
     --ref-id GOOGLE_WORKSPACE_OAUTH_CLIENT_JSON \
-    --dry-run
+    --dry-run </dev/null
   "$OPENCLAW_BIN" config set "$CONFIG_KEY" \
     --ref-provider default \
     --ref-source store \
-    --ref-id GOOGLE_WORKSPACE_OAUTH_CLIENT_JSON
+    --ref-id GOOGLE_WORKSPACE_OAUTH_CLIENT_JSON </dev/null
 
-  AUDIT_OUTPUT="$($OPENCLAW_BIN secrets audit 2>&1 || true)"
+  AUDIT_OUTPUT="$($OPENCLAW_BIN secrets audit </dev/null 2>&1 || true)"
   [[ "$AUDIT_OUTPUT" == *"unresolved=0"* ]] \
     || die "SecretRef is unresolved. Import a valid OAuth JSON and rerun with --secret-already-stored."
 
-  "$OPENCLAW_BIN" secrets reload
-  "$OPENCLAW_BIN" plugins enable "$PLUGIN_ID" --accept-capabilities
-  "$OPENCLAW_BIN" plugins reload "$PLUGIN_ID" --wait --accept-capabilities --json
+  "$OPENCLAW_BIN" secrets reload </dev/null
+  "$OPENCLAW_BIN" plugins enable "$PLUGIN_ID" --accept-capabilities </dev/null
+  "$OPENCLAW_BIN" plugins reload "$PLUGIN_ID" --wait --accept-capabilities --json </dev/null
 
   INSPECT_FILE="$(mktemp /tmp/google-workspace-inspect.XXXXXX.json)"
-  "$OPENCLAW_BIN" plugins inspect "$PLUGIN_ID" --runtime --json > "$INSPECT_FILE"
+  "$OPENCLAW_BIN" plugins inspect "$PLUGIN_ID" --runtime --json </dev/null > "$INSPECT_FILE"
   python3 - "$INSPECT_FILE" <<'PY'
 import json, sys
 p=json.load(open(sys.argv[1], encoding='utf-8'))['plugin']
@@ -1571,7 +1571,7 @@ PY
   fi
 
   if systemctl is-active --quiet openclaw; then say "Gateway service: active"; fi
-  READY="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18789/readyz || true)"
+  READY="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18789/readyz </dev/null || true)"
   say "Gateway readiness HTTP: ${READY:-unreachable}"
   say ""
   say "Plugin installation and SecretRef configuration completed."
