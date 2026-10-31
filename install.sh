@@ -1475,12 +1475,49 @@ fi
 mv "$SOURCE" "$PLUGIN_DIR"
 STAGE=""
 
-"$OPENCLAW_BIN" plugins install \
+set +e
+INSTALL_OUTPUT="$("$OPENCLAW_BIN" plugins install \
   --link \
   --force \
   --accept-capabilities \
   --acknowledge-install-policy-warning \
-  "$PLUGIN_DIR"
+  "$PLUGIN_DIR" 2>&1)"
+INSTALL_STATUS=$?
+set -e
+printf '%s\n' "$INSTALL_OUTPUT"
+
+if ((INSTALL_STATUS != 0)); then
+  # OpenClaw 2026.10.9 can save and activate a first local install before its
+  # persisted registry has generated the package's runtime-child rows. Recover
+  # only from that exact acknowledged state; every other install error remains
+  # terminal.
+  if [[ "$INSTALL_OUTPUT" == *"installation is saved"* \
+     && "$INSTALL_OUTPUT" == *"no authoritative runtime child list"* ]]; then
+    say "Refreshing the plugin registry after the saved first install..."
+    REGISTRY_FILE="$(mktemp /tmp/google-workspace-registry.XXXXXX.json)"
+    "$OPENCLAW_BIN" plugins registry --refresh --json > "$REGISTRY_FILE"
+    LIST_FILE="$(mktemp /tmp/google-workspace-list.XXXXXX.json)"
+    "$OPENCLAW_BIN" plugins list --json > "$LIST_FILE"
+    python3 - "$LIST_FILE" "$PLUGIN_ID" "$PLUGIN_DIR" <<'PY'
+import json, os, sys
+payload=json.load(open(sys.argv[1], encoding='utf-8'))
+plugin_id=sys.argv[2]
+expected=os.path.realpath(sys.argv[3])
+for plugin in payload.get('plugins', []):
+    if plugin.get('id') != plugin_id:
+        continue
+    actual=os.path.realpath(plugin.get('rootDir') or '')
+    assert actual == expected, f'unexpected plugin root: {actual}'
+    print('Plugin registry: refreshed')
+    break
+else:
+    raise SystemExit(f'{plugin_id} is absent after registry refresh')
+PY
+    rm -f -- "$REGISTRY_FILE" "$LIST_FILE"
+  else
+    die "OpenClaw rejected the plugin installation (exit $INSTALL_STATUS)."
+  fi
+fi
 
 CONFIGURE_SECRET=0
 if [[ -n "$OAUTH_JSON" ]]; then
